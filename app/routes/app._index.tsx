@@ -39,9 +39,9 @@ export default function Index() {
             <div>
               <div className="zia-eyebrow">INVENTORY CONTROL</div>
               <h1>Know what you have.</h1>
-              <p>Live Shopify inventory visibility is the foundation for every reorder and purchasing decision in ZIA.</p>
+              <p>Live Shopify inventory visibility now feeds the reorder and purchasing workflow in ZIA.</p>
             </div>
-            <div className="zia-readonly">READ-ONLY FOUNDATION</div>
+            <div className="zia-readonly">LIVE CONTROL</div>
           </div>
 
           <div className="zia-grid">
@@ -95,11 +95,11 @@ export default function Index() {
             </div>
           </s-section>
 
-          <s-section heading="What comes next">
+          <s-section heading="Control workflow">
             <div className="zia-next-grid">
-              <div><strong>1. Set reorder rules</strong><span>Define the stock level that should trigger a buying decision.</span></div>
-              <div><strong>2. Add suppliers</strong><span>Connect Shopify variants to the suppliers that can replenish them.</span></div>
-              <div><strong>3. Build the purchasing loop</strong><span>Turn approved suggestions into purchase orders and receiving records.</span></div>
+              <div><strong>Inventory Health</strong><span>See stock by location and the items that need action. <s-link href="/app/inventory-health">Open health</s-link></span></div>
+              <div><strong>Reorder Rules</strong><span>Set the threshold and target stock for each variant and location. <s-link href="/app/reorder-rules">Configure rules</s-link></span></div>
+              <div><strong>Suppliers</strong><span>Map tracked variants to the suppliers that replenish them. <s-link href="/app/suppliers">Manage suppliers</s-link></span></div>
             </div>
           </s-section>
         </>
