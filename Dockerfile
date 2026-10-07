@@ -15,4 +15,4 @@ COPY . .
 
 RUN npm run build
 
-CMD ["npm", "run", "setup", "&&", "npm", "run", "start"]
+CMD ["sh", "-c", "npm run setup && npm run start"]
