@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { Prisma } from "@prisma/client";
 import { Form, redirect, useActionData, useLoaderData } from "react-router";
 
 import { authenticate } from "../shopify.server";
@@ -49,6 +50,49 @@ function nextPurchaseOrderNumber(numbers: string[]) {
   return `PO-${String(highest + 1).padStart(5, "0")}`;
 }
 
+function parseDateOnly(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value
+    ? null
+    : date;
+}
+
+async function createPurchaseOrderWithRetry(
+  shop: string,
+  data: Omit<Prisma.PurchaseOrderCreateArgs["data"], "shop" | "number">,
+) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const existingNumbers = await prisma.purchaseOrder.findMany({
+      where: { shop },
+      select: { number: true },
+    });
+    const number = nextPurchaseOrderNumber(
+      existingNumbers.map((item) => item.number),
+    );
+
+    try {
+      return await prisma.purchaseOrder.create({
+        data: {
+          ...data,
+          shop,
+          number,
+        },
+      });
+    } catch (error) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== "P2002" ||
+        attempt === 2
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error("Could not allocate a purchase order number.");
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
@@ -61,7 +105,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const expectedAtValue = String(formData.get("expectedAt") || "").trim();
   const notes = String(formData.get("notes") || "").trim();
 
-  if (!supplierId || !variantGid || !locationGid || !Number.isInteger(quantity) || quantity <= 0) {
+  if (!supplierId || !variantGid || !locationGid || !Number.isSafeInteger(quantity) || quantity <= 0) {
     return { status: "error" as const, message: "Supplier, location, variant and a positive quantity are required." };
   }
 
@@ -92,37 +136,30 @@ export async function action({ request }: ActionFunctionArgs) {
     return { status: "error" as const, message: "The selected supplier does not belong to this shop." };
   }
 
-  const existingNumbers = await prisma.purchaseOrder.findMany({
-    where: { shop: session.shop },
-    select: { number: true },
-  });
-  const number = nextPurchaseOrderNumber(existingNumbers.map((item) => item.number));
+  const expectedAt = expectedAtValue ? parseDateOnly(expectedAtValue) : null;
+  if (expectedAtValue && !expectedAt) {
+    return { status: "error" as const, message: "Expected date must be a valid calendar date." };
+  }
 
   try {
-    await prisma.purchaseOrder.create({
-      data: {
-        shop: session.shop,
-        number,
-        supplierId,
-        status: "DRAFT",
-        locationGid: location.id,
-        locationName: location.name,
-        expectedAt: expectedAtValue
-          ? new Date(`${expectedAtValue}T00:00:00.000Z`)
-          : null,
-        notes: notes || null,
-        lines: {
-          create: {
-            variantGid,
-            inventoryItemGid: variant.inventoryItem?.id ?? null,
-            sku: variant.sku,
-            title:
-              variant.product.title === variant.displayName
-                ? variant.product.title
-                : `${variant.product.title} — ${variant.displayName}`,
-            quantityOrdered: quantity,
-            unitCost,
-          },
+    await createPurchaseOrderWithRetry(session.shop, {
+      supplierId,
+      status: "DRAFT",
+      locationGid: location.id,
+      locationName: location.name,
+      expectedAt,
+      notes: notes || null,
+      lines: {
+        create: {
+          variantGid,
+          inventoryItemGid: variant.inventoryItem?.id ?? null,
+          sku: variant.sku,
+          title:
+            variant.product.title === variant.displayName
+              ? variant.product.title
+              : `${variant.product.title} — ${variant.displayName}`,
+          quantityOrdered: quantity,
+          unitCost,
         },
       },
     });
