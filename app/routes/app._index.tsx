@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
 import { authenticate } from "../shopify.server";
 import { loadInventoryFoundation, summariseInventory } from "../lib/inventory.server";
@@ -97,11 +97,11 @@ export default function Index() {
 
           <s-section heading="Control workflow">
             <div className="zia-next-grid">
-              <div><strong>Inventory Health</strong><span>See stock by location and the items that need action. <s-link href="/app/inventory-health">Open health</s-link></span></div>
-              <div><strong>Reorder Rules</strong><span>Set the threshold and target stock for each variant and location. <s-link href="/app/reorder-rules">Configure rules</s-link></span></div>
-              <div><strong>Suppliers</strong><span>Map tracked variants to the suppliers that replenish them. <s-link href="/app/suppliers">Manage suppliers</s-link></span></div>
-              <div><strong>Purchase Orders</strong><span>Create supplier orders from tracked Shopify variants. <s-link href="/app/purchase-orders">Open purchasing</s-link></span></div>
-              <div><strong>Receiving</strong><span>Record deliveries against open purchase orders. <s-link href="/app/receiving">Open receiving</s-link></span></div>
+              <div><strong>Inventory Health</strong><span>See stock by location and the items that need action. <Link to="/app/inventory-health">Open health</Link></span></div>
+              <div><strong>Reorder Rules</strong><span>Set the threshold and target stock for each variant and location. <Link to="/app/reorder-rules">Configure rules</Link></span></div>
+              <div><strong>Suppliers</strong><span>Map tracked variants to the suppliers that replenish them. <Link to="/app/suppliers">Manage suppliers</Link></span></div>
+              <div><strong>Purchase Orders</strong><span>Create supplier orders from tracked Shopify variants. <Link to="/app/purchase-orders">Open purchasing</Link></span></div>
+              <div><strong>Receiving</strong><span>Record deliveries against open purchase orders. <Link to="/app/receiving">Open receiving</Link></span></div>
             </div>
           </s-section>
         </>
