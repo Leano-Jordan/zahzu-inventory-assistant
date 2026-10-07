@@ -12,8 +12,9 @@ import { loadInventoryFoundation } from "../lib/inventory.server";
 import "./zia.css";
 
 function parseNonNegativeInt(value: FormDataEntryValue | null) {
+  if (value === null || value === "") return null;
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
