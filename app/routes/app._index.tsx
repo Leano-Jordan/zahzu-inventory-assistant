@@ -67,7 +67,7 @@ export default function Index() {
             </div>
           </div>
 
-          <s-section heading="Items needing attention">
+          <s-section heading="Lowest stock">
             <div className="zia-table-wrap">
               <table className="zia-table">
                 <thead>
