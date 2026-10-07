@@ -21,6 +21,7 @@ export default function App() {
         <a href="/app/inventory-health">Inventory Health</a>
         <a href="/app/reorder-rules">Reorder Rules</a>
         <a href="/app/suppliers">Suppliers</a>
+        <a href="/app/purchase-orders">Purchase Orders</a>
       </nav>
       <Outlet />
     </AppProvider>
