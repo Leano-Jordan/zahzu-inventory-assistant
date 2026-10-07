@@ -1,0 +1,3 @@
+# Prisma migration lock file
+# Do not edit manually.
+provider = "sqlite"
