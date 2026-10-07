@@ -42,6 +42,6 @@ Branch policy: **main only**. Repository currently reports only the `main` branc
 
 ### Current main
 
-`1a66846fed7efcfa99c40e84a8479bb98e636001`
+`1824cd3b709167d3a3fc57e8374dc96bcaece275`
 
 Next audit focus: verify the actual Shopify inventory write path and end-to-end sync state transitions without weakening the existing tenant/data-integrity controls.
