@@ -7,8 +7,17 @@ type AdminClient = {
 
 type GraphqlBody = {
   data?: Record<string, unknown>;
-  errors?: Array<{ message?: string }>;
+  errors?: Array<{
+    message?: string;
+    extensions?: { code?: string };
+  }>;
 };
+
+const GRAPHQL_MAX_RETRIES = 2;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export type ProductVariantNode = {
   id: string;
@@ -164,17 +173,38 @@ async function graphqlRequest<T>(
   query: string,
   variables: Record<string, unknown>,
 ): Promise<T> {
-  const response = await admin.graphql(query, { variables });
-  const body = (await response.json()) as GraphqlBody & { data?: T };
+  for (let attempt = 0; attempt <= GRAPHQL_MAX_RETRIES; attempt += 1) {
+    const response = await admin.graphql(query, { variables });
+    const body = (await response.json()) as GraphqlBody & { data?: T };
+    const throttled =
+      response.status === 429 ||
+      body.errors?.some(
+        (error) =>
+          error.extensions?.code === "THROTTLED" ||
+          /throttl/i.test(error.message || ""),
+      );
 
-  if (!response.ok || body.errors?.length || !body.data) {
-    const message =
-      body.errors?.map((error) => error.message).filter(Boolean).join("; ") ||
-      `Shopify GraphQL request failed with HTTP ${response.status}`;
-    throw new Error(message);
+    if (throttled && attempt < GRAPHQL_MAX_RETRIES) {
+      const retryAfter = Number(response.headers.get("Retry-After"));
+      const delay =
+        Number.isFinite(retryAfter) && retryAfter > 0
+          ? retryAfter * 1000
+          : 250 * 2 ** attempt;
+      await sleep(delay);
+      continue;
+    }
+
+    if (!response.ok || body.errors?.length || !body.data) {
+      const message =
+        body.errors?.map((error) => error.message).filter(Boolean).join("; ") ||
+        `Shopify GraphQL request failed with HTTP ${response.status}`;
+      throw new Error(message);
+    }
+
+    return body.data;
   }
 
-  return body.data;
+  throw new Error("Shopify GraphQL request exhausted its retry budget.");
 }
 
 async function loadAllVariants(admin: AdminClient): Promise<ProductVariantNode[]> {
