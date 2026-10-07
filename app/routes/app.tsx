@@ -16,12 +16,12 @@ export default function App() {
 
   return (
     <AppProvider apiKey={apiKey}>
-      <s-app-nav>
-        <s-link href="/app">Overview</s-link>
-        <s-link href="/app/inventory-health">Inventory Health</s-link>
-        <s-link href="/app/reorder-rules">Reorder Rules</s-link>
-        <s-link href="/app/suppliers">Suppliers</s-link>
-      </s-app-nav>
+      <nav className="zia-nav" aria-label="ZIA navigation">
+        <a href="/app">Overview</a>
+        <a href="/app/inventory-health">Inventory Health</a>
+        <a href="/app/reorder-rules">Reorder Rules</a>
+        <a href="/app/suppliers">Suppliers</a>
+      </nav>
       <Outlet />
     </AppProvider>
   );
