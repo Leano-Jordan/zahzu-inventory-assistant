@@ -18,6 +18,8 @@ function parseNonNegativeInt(value: FormDataEntryValue | null) {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  const editId = url.searchParams.get("edit");
   const foundation = await loadInventoryFoundation(admin);
 
   try {
@@ -47,6 +49,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       locations: foundation.locations,
       rules,
       suppliers,
+      selectedRule: editId
+        ? rules.find((rule) => rule.id === editId) ?? null
+        : null,
+      saved: url.searchParams.get("saved") === "1",
     };
   } catch (error) {
     console.error("ZIA reorder rules storage load failed", error);
@@ -67,6 +73,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       locations: foundation.locations,
       rules: [],
       suppliers: [],
+      selectedRule: null,
+      saved: false,
     };
   }
 };
@@ -225,15 +233,27 @@ export default function ReorderRules() {
         <div className="zia-banner zia-banner-error">{actionData.message}</div>
       ) : null}
 
+      {data.saved ? (
+        <div className="zia-banner zia-banner-success">Reorder rule saved.</div>
+      ) : null}
+
       {data.status === "storage_error" ? (
         <div className="zia-banner zia-banner-error">{data.message}</div>
       ) : null}
 
-      <s-section heading="Create or update a rule">
+      <s-section heading={data.selectedRule ? "Edit reorder rule" : "Create reorder rule"}>
         <Form method="post" className="zia-form-grid">
+          {data.selectedRule ? (
+            <input type="hidden" name="ruleId" value={data.selectedRule.id} />
+          ) : null}
           <label className="zia-field">
             <span>Variant</span>
-            <select className="zia-input" name="variantGid" required>
+            <select
+              className="zia-input"
+              name="variantGid"
+              required
+              defaultValue={data.selectedRule?.variantGid ?? ""}
+            >
               <option value="">Choose a tracked variant</option>
               {data.variants.map((variant) => (
                 <option key={variant.id} value={variant.id}>
@@ -245,7 +265,12 @@ export default function ReorderRules() {
 
           <label className="zia-field">
             <span>Location</span>
-            <select className="zia-input" name="locationGid" required>
+            <select
+              className="zia-input"
+              name="locationGid"
+              required
+              defaultValue={data.selectedRule?.locationGid ?? ""}
+            >
               <option value="">Choose a location</option>
               {data.locations.map((location) => (
                 <option key={location.id} value={location.id}>
@@ -262,7 +287,7 @@ export default function ReorderRules() {
               type="number"
               min="0"
               name="reorderPoint"
-              defaultValue="0"
+              defaultValue={String(data.selectedRule?.reorderPoint ?? 0)}
               required
             />
           </label>
@@ -274,14 +299,18 @@ export default function ReorderRules() {
               type="number"
               min="0"
               name="targetStock"
-              defaultValue="10"
+              defaultValue={String(data.selectedRule?.targetStock ?? 10)}
               required
             />
           </label>
 
           <label className="zia-field">
             <span>Preferred supplier</span>
-            <select className="zia-input" name="preferredSupplierId">
+            <select
+              className="zia-input"
+              name="preferredSupplierId"
+              defaultValue={data.selectedRule?.preferredSupplierId ?? ""}
+            >
               <option value="">No preferred supplier yet</option>
               {data.suppliers.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
@@ -292,14 +321,21 @@ export default function ReorderRules() {
           </label>
 
           <label className="zia-check">
-            <input type="checkbox" name="active" defaultChecked />
+            <input
+              type="checkbox"
+              name="active"
+              defaultChecked={data.selectedRule?.active ?? true}
+            />
             <span>Rule active</span>
           </label>
 
           <div className="zia-actions">
             <button className="zia-button" type="submit">
-              Save rule
+              {data.selectedRule ? "Update rule" : "Save rule"}
             </button>
+            {data.selectedRule ? (
+              <s-link href="/app/reorder-rules">Cancel edit</s-link>
+            ) : null}
           </div>
         </Form>
       </s-section>
