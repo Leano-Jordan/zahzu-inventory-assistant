@@ -58,7 +58,7 @@ export async function action({ request }: ActionFunctionArgs) {
           reason: "PURCHASE_RECEIPT_RECORDED",
           source: "PURCHASE_ORDER",
           actor: session.email || session.shop,
-          metadata: JSON.stringify({ purchaseOrderId: line.purchaseOrderId, lineId: line.id }),
+          metadata: JSON.stringify({ purchaseOrderId: line.purchaseOrderId, lineId: line.id, locationGid: line.purchaseOrder.locationGid, locationName: line.purchaseOrder.locationName, shopifyInventoryUpdate: "pending" }),
         },
       }),
     ]);
@@ -89,7 +89,7 @@ export default function Receiving() {
                   order.lines.filter((line) => line.quantityReceived < line.quantityOrdered).map((line) => (
                     <tr key={line.id}>
                       <td className="zia-product-title">{order.number}</td>
-                      <td>{order.supplier.name}</td>
+                      <td>{order.supplier.name}<div className="zia-variant-name">{order.locationName || "Location not set"}</div></td>
                       <td><div className="zia-product-title">{line.title}</div><div className="zia-variant-name">{line.sku || "SKU not set"}</div></td>
                       <td>{line.quantityOrdered}</td>
                       <td>{line.quantityReceived}</td>
