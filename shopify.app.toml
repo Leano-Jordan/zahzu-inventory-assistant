@@ -1,4 +1,4 @@
-# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+# Learn more about configuring your Shopify app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "7fecb77dde1e17745f090525dacbcce6"
 name = "zahzu-inventory-assistant"
@@ -6,8 +6,7 @@ application_url = "https://example.com"
 embedded = true
 
 [access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products"
+scopes = "read_products,read_inventory,read_locations"
 
 [webhooks]
 api_version = "2026-10"
