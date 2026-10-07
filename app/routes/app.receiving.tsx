@@ -38,30 +38,57 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     const newReceived = line.quantityReceived + receivedNow;
-    const status = newReceived >= line.quantityOrdered ? "RECEIVED" : "PARTIAL";
 
-    await prisma.$transaction([
-      prisma.purchaseOrderLine.update({
+    await prisma.$transaction(async (tx) => {
+      await tx.purchaseOrderLine.update({
         where: { id: line.id },
         data: { quantityReceived: newReceived },
-      }),
-      prisma.purchaseOrder.update({
+      });
+
+      const lines = await tx.purchaseOrderLine.findMany({
+        where: { purchaseOrderId: line.purchaseOrderId },
+        select: { quantityOrdered: true, quantityReceived: true },
+      });
+      const allReceived = lines.length > 0 && lines.every((item) => item.quantityReceived >= item.quantityOrdered);
+      const anyReceived = lines.some((item) => item.quantityReceived > 0);
+      const status = allReceived ? "RECEIVED" : anyReceived ? "PARTIAL" : "ORDERED";
+
+      await tx.purchaseOrder.update({
         where: { id: line.purchaseOrderId },
-        data: { status, receivedAt: status === "RECEIVED" ? new Date() : null },
-      }),
-      prisma.inventoryAudit.create({
+        data: { status, receivedAt: allReceived ? new Date() : null },
+      });
+
+      await tx.inventoryAudit.create({
         data: {
           shop: session.shop,
           variantGid: line.variantGid,
           inventoryItemGid: line.inventoryItemGid,
+          locationGid: line.purchaseOrder.locationGid,
+          locationName: line.purchaseOrder.locationName,
           change: receivedNow,
           reason: "PURCHASE_RECEIPT_RECORDED",
           source: "PURCHASE_ORDER",
           actor: session.email || session.shop,
-          metadata: JSON.stringify({ purchaseOrderId: line.purchaseOrderId, lineId: line.id, locationGid: line.purchaseOrder.locationGid, locationName: line.purchaseOrder.locationName, shopifyInventoryUpdate: "pending" }),
+          metadata: JSON.stringify({
+            purchaseOrderId: line.purchaseOrderId,
+            lineId: line.id,
+            shopifyInventoryUpdate: "pending",
+          }),
         },
-      }),
-    ]);
+      });
+
+      await tx.syncState.upsert({
+        where: { shop_resource: { shop: session.shop, resource: "SHOPIFY_INVENTORY_RECEIPTS" } },
+        create: {
+          shop: session.shop,
+          resource: "SHOPIFY_INVENTORY_RECEIPTS",
+          lastError: "Receipt recorded locally; Shopify inventory update is pending.",
+        },
+        update: {
+          lastError: "Receipt recorded locally; Shopify inventory update is pending.",
+        },
+      });
+    });
   } catch (error) {
     console.error("ZIA receiving failed", error);
     return { status: "error" as const, message: "The receipt could not be recorded." };
