@@ -23,6 +23,7 @@ export default function App() {
         <a href="/app/suppliers">Suppliers</a>
         <a href="/app/purchase-orders">Purchase Orders</a>
         <a href="/app/receiving">Receiving</a>
+        <a href="/app/inventory-sync">Inventory Sync</a>
       </nav>
       <Outlet />
     </AppProvider>
