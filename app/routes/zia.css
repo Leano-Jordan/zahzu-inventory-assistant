@@ -296,3 +296,32 @@ textarea.zia-input {
     grid-template-columns: 1fr;
   }
 }
+
+
+.zia-nav {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--zia-border);
+  background: #ffffff;
+}
+
+.zia-nav a {
+  color: var(--zia-ink);
+  text-decoration: none;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.zia-nav a:hover {
+  background: #f1f3f5;
+}
+
+.zia-banner-success {
+  background: #edf8f0;
+  border: 1px solid #cce8d2;
+  color: #175c2d;
+}
