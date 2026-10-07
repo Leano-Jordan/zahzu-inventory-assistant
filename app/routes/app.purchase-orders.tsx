@@ -7,14 +7,46 @@ import { loadInventoryFoundation } from "../lib/inventory.server";
 import "./zia.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const orders = await prisma.purchaseOrder.findMany({
-    where: { shop: session.shop },
-    include: { supplier: true, lines: true },
-    orderBy: { createdAt: "desc" },
-  });
-  return { orders };
+  const { admin, session } = await authenticate.admin(request);
+  const [orders, suppliers, foundation] = await Promise.all([
+    prisma.purchaseOrder.findMany({
+      where: { shop: session.shop },
+      include: { supplier: true, lines: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.supplier.findMany({
+      where: { shop: session.shop },
+      orderBy: { name: "asc" },
+    }),
+    loadInventoryFoundation(admin),
+  ]);
+
+  return {
+    orders,
+    suppliers,
+    variants: foundation.variants
+      .filter((variant) => variant.inventoryItem?.tracked)
+      .map((variant) => ({
+        id: variant.id,
+        inventoryItemGid: variant.inventoryItem?.id ?? null,
+        label:
+          variant.product.title === variant.displayName
+            ? variant.product.title
+            : `${variant.product.title} — ${variant.displayName}`,
+        sku: variant.sku,
+      })),
+    saved: new URL(request.url).searchParams.get("saved") === "1",
+  };
 };
+
+function nextPurchaseOrderNumber(numbers: string[]) {
+  const highest = numbers.reduce((max, number) => {
+    const match = /^PO-(\d+)$/.exec(number);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+
+  return `PO-${String(highest + 1).padStart(5, "0")}`;
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   const { admin, session } = await authenticate.admin(request);
@@ -30,12 +62,16 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!supplierId || !variantGid || !Number.isInteger(quantity) || quantity <= 0) {
     return { status: "error" as const, message: "Supplier, variant and a positive quantity are required." };
   }
+
   if (unitCost !== null && (!Number.isFinite(unitCost) || unitCost < 0)) {
     return { status: "error" as const, message: "Unit cost must be a valid non-negative amount." };
   }
 
   const foundation = await loadInventoryFoundation(admin);
-  const variant = foundation.variants.find((item) => item.id === variantGid && item.inventoryItem?.tracked);
+  const variant = foundation.variants.find(
+    (item) => item.id === variantGid && item.inventoryItem?.tracked,
+  );
+
   if (!variant) {
     return { status: "error" as const, message: "The selected variant is not tracked by Shopify." };
   }
@@ -44,41 +80,56 @@ export async function action({ request }: ActionFunctionArgs) {
     where: { id: supplierId, shop: session.shop },
     select: { id: true },
   });
+
   if (!supplier) {
     return { status: "error" as const, message: "The selected supplier does not belong to this shop." };
   }
 
-  const count = await prisma.purchaseOrder.count({ where: { shop: session.shop } });
-  const number = `PO-${String(count + 1).padStart(5, "0")}`;
+  const existingNumbers = await prisma.purchaseOrder.findMany({
+    where: { shop: session.shop },
+    select: { number: true },
+  });
+  const number = nextPurchaseOrderNumber(existingNumbers.map((item) => item.number));
 
-  await prisma.purchaseOrder.create({
-    data: {
-      shop: session.shop,
-      number,
-      supplierId,
-      status: "DRAFT",
-      expectedAt: expectedAtValue ? new Date(`${expectedAtValue}T00:00:00.000Z`) : null,
-      notes: notes || null,
-      lines: {
-        create: {
-          variantGid,
-          inventoryItemGid: variant.inventoryItem?.id ?? null,
-          sku: variant.sku,
-          title: variant.product.title === variant.displayName
-            ? variant.product.title
-            : `${variant.product.title} — ${variant.displayName}`,
-          quantityOrdered: quantity,
-          unitCost,
+  try {
+    await prisma.purchaseOrder.create({
+      data: {
+        shop: session.shop,
+        number,
+        supplierId,
+        status: "DRAFT",
+        expectedAt: expectedAtValue
+          ? new Date(`${expectedAtValue}T00:00:00.000Z`)
+          : null,
+        notes: notes || null,
+        lines: {
+          create: {
+            variantGid,
+            inventoryItemGid: variant.inventoryItem?.id ?? null,
+            sku: variant.sku,
+            title:
+              variant.product.title === variant.displayName
+                ? variant.product.title
+                : `${variant.product.title} — ${variant.displayName}`,
+            quantityOrdered: quantity,
+            unitCost,
+          },
         },
       },
-    },
-  });
+    });
+  } catch (error) {
+    console.error("ZIA purchase order creation failed", error);
+    return {
+      status: "error" as const,
+      message: "The purchase order could not be created. Please retry.",
+    };
+  }
 
   return redirect("/app/purchase-orders?saved=1");
 }
 
 export default function PurchaseOrders() {
-  const { orders } = useLoaderData<typeof loader>();
+  const { orders, suppliers, variants, saved } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
   return (
@@ -89,8 +140,12 @@ export default function PurchaseOrders() {
         <div className="zia-banner zia-banner-error">{actionData.message}</div>
       ) : null}
 
+      {saved ? (
+        <div className="zia-banner zia-banner-success">Draft purchase order created.</div>
+      ) : null}
+
       <s-section heading="Create purchase order">
-        <PurchaseOrderForm />
+        <PurchaseOrderForm suppliers={suppliers} variants={variants} />
       </s-section>
 
       <s-section heading={`Purchase orders · ${orders.length}`}>
@@ -123,56 +178,59 @@ export default function PurchaseOrders() {
   );
 }
 
-function PurchaseOrderForm() {
+type PurchaseOrderFormProps = {
+  suppliers: Array<{ id: string; name: string }>;
+  variants: Array<{ id: string; label: string; sku: string | null }>;
+};
+
+function PurchaseOrderForm({ suppliers, variants }: PurchaseOrderFormProps) {
   return (
     <Form method="post" className="zia-form-grid">
-      <SupplierSelect />
-      <VariantSelect />
+      <label className="zia-field">
+        <span>Supplier</span>
+        <select className="zia-input" name="supplierId" required>
+          <option value="">Choose a supplier</option>
+          {suppliers.map((supplier) => (
+            <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+          ))}
+        </select>
+      </label>
+
+      <label className="zia-field">
+        <span>Tracked variant</span>
+        <select className="zia-input" name="variantGid" required>
+          <option value="">Choose a tracked variant</option>
+          {variants.map((variant) => (
+            <option key={variant.id} value={variant.id}>
+              {variant.label}{variant.sku ? ` — ${variant.sku}` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <label className="zia-field">
         <span>Quantity</span>
         <input className="zia-input" type="number" min="1" name="quantity" defaultValue="1" required />
       </label>
+
       <label className="zia-field">
         <span>Unit cost</span>
         <input className="zia-input" type="number" min="0" step="0.01" name="unitCost" />
       </label>
+
       <label className="zia-field">
         <span>Expected date</span>
         <input className="zia-input" type="date" name="expectedAt" />
       </label>
+
       <label className="zia-field">
         <span>Notes</span>
         <input className="zia-input" name="notes" />
       </label>
+
       <div className="zia-actions">
         <button className="zia-button" type="submit">Create draft PO</button>
       </div>
     </Form>
   );
-}
-
-function SupplierSelect() {
-  const { suppliers } = useLoaderData<typeof loader>();
-  return (
-    <label className="zia-field">
-      <span>Supplier</span>
-      <select className="zia-input" name="supplierId" required>
-        <option value="">Choose a supplier</option>
-        {suppliersFallback(suppliers)}
-      </select>
-    </label>
-  );
-}
-
-function VariantSelect() {
-  return (
-    <label className="zia-field">
-      <span>Variant</span>
-      <input className="zia-input" name="variantGid" placeholder="Shopify variant GID" required />
-    </label>
-  );
-}
-
-function suppliersFallback(suppliers: Array<{ id: string; name: string }>) {
-  return suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>);
 }
