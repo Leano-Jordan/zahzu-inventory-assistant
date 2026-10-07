@@ -1,34 +1,156 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// ZIA application data. Shopify remains the source of truth for Shopify inventory.
 
 generator client {
   provider = "prisma-client-js"
 }
 
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
   provider = "sqlite"
   url      = "file:dev.sqlite"
 }
 
 model Session {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false)
-  scope         String?
-  expires       DateTime?
-  accessToken   String
-  userId        BigInt?
-  firstName     String?
-  lastName      String?
-  email         String?
-  accountOwner  Boolean   @default(false)
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false)
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
+}
+
+model Supplier {
+  id             String          @id @default(cuid())
+  shop           String
+  name           String
+  email          String?
+  phone          String?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  items          SupplierItem[]
+  purchaseOrders PurchaseOrder[]
+  reorderRules   ReorderRule[]
+
+  @@unique([shop, name])
+  @@index([shop])
+}
+
+model SupplierItem {
+  id               String   @id @default(cuid())
+  supplierId       String
+  shop             String
+  variantGid       String
+  inventoryItemGid String?
+  sku              String?
+  unitCost         Float?
+  leadTimeDays     Int?
+  reorderPoint     Int?
+  reorderQuantity  Int?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  supplier         Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, variantGid])
+  @@index([shop, variantGid])
+}
+
+model ReorderRule {
+  id                  String    @id @default(cuid())
+  shop                String
+  variantGid          String
+  locationGid         String
+  reorderPoint        Int       @default(0)
+  targetStock         Int       @default(0)
+  preferredSupplierId String?
+  active              Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  preferredSupplier   Supplier? @relation(fields: [preferredSupplierId], references: [id], onDelete: SetNull)
+
+  @@unique([shop, variantGid, locationGid])
+  @@index([shop, active])
+}
+
+model PurchaseOrder {
+  id          String              @id @default(cuid())
+  shop        String
+  number      String
+  supplierId  String
+  status      String              @default("DRAFT")
+  orderedAt   DateTime?
+  expectedAt  DateTime?
+  receivedAt  DateTime?
+  notes       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  supplier    Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lines       PurchaseOrderLine[]
+
+  @@unique([shop, number])
+  @@index([shop, status])
+}
+
+model PurchaseOrderLine {
+  id               String        @id @default(cuid())
+  purchaseOrderId  String
+  variantGid       String
+  inventoryItemGid String?
+  sku              String?
+  title            String
+  quantityOrdered  Int
+  quantityReceived Int           @default(0)
+  unitCost         Float?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+  @@index([variantGid])
+}
+
+model InventoryAudit {
+  id               String   @id @default(cuid())
+  shop             String
+  variantGid       String
+  inventoryItemGid String?
+  locationGid      String?
+  locationName     String?
+  quantityBefore   Int?
+  quantityAfter    Int?
+  change           Int?
+  reason           String
+  source           String
+  actor            String?
+  metadata         String?
+  createdAt        DateTime @default(now())
+
+  @@index([shop, variantGid, createdAt])
+  @@index([shop, locationGid, createdAt])
+}
+
+model SyncState {
+  id               String   @id @default(cuid())
+  shop             String
+  resource         String
+  cursor           String?
+  lastSyncedAt     DateTime?
+  lastSuccessfulAt DateTime?
+  lastError        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([shop, resource])
+  @@index([shop])
 }
