@@ -52,7 +52,7 @@ export default function Index() {
             </div>
             <div className="zia-card">
               <span>Available units</span>
-              <strong>{result.summary.lowestStock.reduce((sum, variant) => sum + (variant.inventoryQuantity ?? 0), 0).toLocaleString()}</strong>
+              <strong>{result.summary.totalAvailable.toLocaleString()}</strong>
               <small>across tracked variants</small>
             </div>
             <div className="zia-card zia-card-alert">
