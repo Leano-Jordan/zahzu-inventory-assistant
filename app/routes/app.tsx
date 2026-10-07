@@ -17,13 +17,13 @@ export default function App() {
   return (
     <AppProvider apiKey={apiKey}>
       <nav className="zia-nav" aria-label="ZIA navigation">
-        <NavLink to="/app" end={to === "/app"}>{label}</NavLink>
-        <NavLink to="/app/inventory-health" end={to === "/app"}>{label}</NavLink>
-        <NavLink to="/app/reorder-rules" end={to === "/app"}>{label}</NavLink>
-        <NavLink to="/app/suppliers" end={to === "/app"}>{label}</NavLink>
-        <NavLink to="/app/purchase-orders" end={to === "/app"}>{label}</NavLink>
-        <NavLink to="/app/receiving" end={to === "/app"}>{label}</NavLink>
-        <NavLink to="/app/inventory-sync" end={to === "/app"}>{label}</NavLink>
+        <NavLink to="/app" end>Overview</NavLink>
+        <NavLink to="/app/inventory-health">Inventory Health</NavLink>
+        <NavLink to="/app/reorder-rules">Reorder Rules</NavLink>
+        <NavLink to="/app/suppliers">Suppliers</NavLink>
+        <NavLink to="/app/purchase-orders">Purchase Orders</NavLink>
+        <NavLink to="/app/receiving">Receiving</NavLink>
+        <NavLink to="/app/inventory-sync">Inventory Sync</NavLink>
       </nav>
       <Outlet />
     </AppProvider>
