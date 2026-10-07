@@ -91,6 +91,8 @@ model PurchaseOrder {
   status      String              @default("DRAFT")
   orderedAt   DateTime?
   expectedAt  DateTime?
+  locationGid String?
+  locationName String?
   receivedAt  DateTime?
   notes       String?
   createdAt   DateTime            @default(now())
