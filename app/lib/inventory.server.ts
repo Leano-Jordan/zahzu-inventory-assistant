@@ -84,10 +84,15 @@ query InventoryFoundationLocations($first: Int!, $after: String) {
 }`;
 
 
-const INVENTORY_HEALTH_QUERY = String.raw`
+const INVENTORY_HEALTH_BY_LOCATION_QUERY = String.raw`
 #graphql
-query InventoryHealthVariants($first: Int!, $after: String) {
-  productVariants(first: $first, after: $after) {
+query InventoryHealthVariantsByLocation(
+  $first: Int!
+  $after: String
+  $query: String!
+  $locationId: ID!
+) {
+  productVariants(first: $first, after: $after, query: $query) {
     nodes {
       id
       displayName
@@ -95,16 +100,10 @@ query InventoryHealthVariants($first: Int!, $after: String) {
       inventoryItem {
         id
         tracked
-        inventoryLevels(first: 250) {
-          nodes {
-            location {
-              id
-              name
-            }
-            quantities(names: ["available", "on_hand", "incoming", "committed"]) {
-              name
-              quantity
-            }
+        inventoryLevel(locationId: $locationId) {
+          quantities(names: ["available", "on_hand", "incoming", "committed"]) {
+            name
+            quantity
           }
         }
       }
@@ -146,12 +145,9 @@ type InventoryHealthNode = {
   inventoryItem: {
     id: string;
     tracked: boolean;
-    inventoryLevels: {
-      nodes: Array<{
-        location: { id: string; name: string };
-        quantities: Array<{ name: string; quantity: number }>;
-      }>;
-    };
+    inventoryLevel: {
+      quantities: Array<{ name: string; quantity: number }>;
+    } | null;
   } | null;
   product: { title: string };
 };
@@ -233,22 +229,39 @@ export async function loadInventoryFoundation(
 export async function loadInventoryHealth(
   admin: AdminClient,
 ): Promise<InventoryHealthLevel[]> {
+  const locations = await loadAllLocations(admin);
   const result: InventoryHealthLevel[] = [];
-  let after: string | null = null;
 
-  do {
-    const data = await graphqlRequest<InventoryHealthPage>(
-      admin,
-      INVENTORY_HEALTH_QUERY,
-      { first: 100, after },
-    );
+  for (const location of locations) {
+    const numericLocationId = location.id.split("/").pop();
+    if (!numericLocationId) {
+      throw new Error(`Invalid Shopify location ID: ${location.id}`);
+    }
 
-    for (const variant of data.productVariants.nodes) {
-      if (!variant.inventoryItem?.tracked) continue;
+    let after: string | null = null;
 
-      for (const level of variant.inventoryItem.inventoryLevels.nodes) {
+    do {
+      const data = await graphqlRequest<InventoryHealthPage>(
+        admin,
+        INVENTORY_HEALTH_BY_LOCATION_QUERY,
+        {
+          first: 250,
+          after,
+          query: `location_id:${numericLocationId}`,
+          locationId: location.id,
+        },
+      );
+
+      for (const variant of data.productVariants.nodes) {
+        if (!variant.inventoryItem?.tracked || !variant.inventoryItem.inventoryLevel) {
+          continue;
+        }
+
         const quantities = new Map(
-          level.quantities.map((quantity) => [quantity.name, quantity.quantity]),
+          variant.inventoryItem.inventoryLevel.quantities.map((quantity) => [
+            quantity.name,
+            quantity.quantity,
+          ]),
         );
 
         result.push({
@@ -257,20 +270,20 @@ export async function loadInventoryHealth(
           productTitle: variant.product.title,
           displayName: variant.displayName,
           sku: variant.sku,
-          locationGid: level.location.id,
-          locationName: level.location.name,
+          locationGid: location.id,
+          locationName: location.name,
           available: quantities.get("available") ?? 0,
           onHand: quantities.get("on_hand") ?? null,
           incoming: quantities.get("incoming") ?? null,
           committed: quantities.get("committed") ?? null,
         });
       }
-    }
 
-    after = data.productVariants.pageInfo.hasNextPage
-      ? data.productVariants.pageInfo.endCursor
-      : null;
-  } while (after);
+      after = data.productVariants.pageInfo.hasNextPage
+        ? data.productVariants.pageInfo.endCursor
+        : null;
+    } while (after);
+  }
 
   return result;
 }
