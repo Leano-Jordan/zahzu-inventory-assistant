@@ -283,6 +283,7 @@ export function summariseInventory(
   return {
     variantCount: variants.length,
     trackedVariantCount: tracked.length,
+    totalAvailable: tracked.reduce((sum, variant) => sum + (variant.inventoryQuantity ?? 0), 0),
     locationCount: locations.length,
     outOfStockCount: tracked.filter(
       (variant) => (variant.inventoryQuantity ?? 0) <= 0,
