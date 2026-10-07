@@ -24,6 +24,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     orders,
     suppliers,
+    locations: foundation.locations,
     variants: foundation.variants
       .filter((variant) => variant.inventoryItem?.tracked)
       .map((variant) => ({
@@ -52,6 +53,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const supplierId = String(formData.get("supplierId") || "");
+  const locationGid = String(formData.get("locationGid") || "");
   const variantGid = String(formData.get("variantGid") || "");
   const quantity = Number(formData.get("quantity") || 0);
   const unitCostValue = String(formData.get("unitCost") || "").trim();
@@ -59,8 +61,8 @@ export async function action({ request }: ActionFunctionArgs) {
   const expectedAtValue = String(formData.get("expectedAt") || "").trim();
   const notes = String(formData.get("notes") || "").trim();
 
-  if (!supplierId || !variantGid || !Number.isInteger(quantity) || quantity <= 0) {
-    return { status: "error" as const, message: "Supplier, variant and a positive quantity are required." };
+  if (!supplierId || !variantGid || !locationGid || !Number.isInteger(quantity) || quantity <= 0) {
+    return { status: "error" as const, message: "Supplier, location, variant and a positive quantity are required." };
   }
 
   if (unitCost !== null && (!Number.isFinite(unitCost) || unitCost < 0)) {
@@ -68,9 +70,14 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const foundation = await loadInventoryFoundation(admin);
+  const location = foundation.locations.find((item) => item.id === locationGid);
   const variant = foundation.variants.find(
     (item) => item.id === variantGid && item.inventoryItem?.tracked,
   );
+
+  if (!location) {
+    return { status: "error" as const, message: "The selected Shopify location is no longer available." };
+  }
 
   if (!variant) {
     return { status: "error" as const, message: "The selected variant is not tracked by Shopify." };
@@ -98,6 +105,8 @@ export async function action({ request }: ActionFunctionArgs) {
         number,
         supplierId,
         status: "DRAFT",
+        locationGid: location.id,
+        locationName: location.name,
         expectedAt: expectedAtValue
           ? new Date(`${expectedAtValue}T00:00:00.000Z`)
           : null,
@@ -129,7 +138,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function PurchaseOrders() {
-  const { orders, suppliers, variants, saved } = useLoaderData<typeof loader>();
+  const { orders, suppliers, variants, locations, saved } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
   return (
@@ -145,7 +154,7 @@ export default function PurchaseOrders() {
       ) : null}
 
       <s-section heading="Create purchase order">
-        <PurchaseOrderForm suppliers={suppliers} variants={variants} />
+        <PurchaseOrderForm suppliers={suppliers} variants={variants} locations={locations} />
       </s-section>
 
       <s-section heading={`Purchase orders · ${orders.length}`}>
@@ -181,9 +190,10 @@ export default function PurchaseOrders() {
 type PurchaseOrderFormProps = {
   suppliers: Array<{ id: string; name: string }>;
   variants: Array<{ id: string; label: string; sku: string | null }>;
+  locations: Array<{ id: string; name: string }>;
 };
 
-function PurchaseOrderForm({ suppliers, variants }: PurchaseOrderFormProps) {
+function PurchaseOrderForm({ suppliers, variants, locations }: PurchaseOrderFormProps) {
   return (
     <Form method="post" className="zia-form-grid">
       <label className="zia-field">
@@ -193,6 +203,14 @@ function PurchaseOrderForm({ suppliers, variants }: PurchaseOrderFormProps) {
           {suppliers.map((supplier) => (
             <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
           ))}
+        </select>
+      </label>
+
+      <label className="zia-field">
+        <span>Receiving location</span>
+        <select className="zia-input" name="locationGid" required>
+          <option value="">Choose a location</option>
+          {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
         </select>
       </label>
 
