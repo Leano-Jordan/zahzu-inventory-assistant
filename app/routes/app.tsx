@@ -1,5 +1,5 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet, useLoaderData, useRouteError } from "react-router";
+import { NavLink, Outlet, useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
@@ -17,13 +17,13 @@ export default function App() {
   return (
     <AppProvider apiKey={apiKey}>
       <nav className="zia-nav" aria-label="ZIA navigation">
-        <a href="/app">Overview</a>
-        <a href="/app/inventory-health">Inventory Health</a>
-        <a href="/app/reorder-rules">Reorder Rules</a>
-        <a href="/app/suppliers">Suppliers</a>
-        <a href="/app/purchase-orders">Purchase Orders</a>
-        <a href="/app/receiving">Receiving</a>
-        <a href="/app/inventory-sync">Inventory Sync</a>
+        <NavLink to="/app" end={to === "/app"}>{label}</NavLink>
+        <NavLink to="/app/inventory-health" end={to === "/app"}>{label}</NavLink>
+        <NavLink to="/app/reorder-rules" end={to === "/app"}>{label}</NavLink>
+        <NavLink to="/app/suppliers" end={to === "/app"}>{label}</NavLink>
+        <NavLink to="/app/purchase-orders" end={to === "/app"}>{label}</NavLink>
+        <NavLink to="/app/receiving" end={to === "/app"}>{label}</NavLink>
+        <NavLink to="/app/inventory-sync" end={to === "/app"}>{label}</NavLink>
       </nav>
       <Outlet />
     </AppProvider>
