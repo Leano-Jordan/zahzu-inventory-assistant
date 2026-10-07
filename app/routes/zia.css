@@ -165,3 +165,134 @@
     grid-template-columns: 1fr;
   }
 }
+
+.zia-banner {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.zia-banner-error {
+  background: #fff1f1;
+  border: 1px solid #f0caca;
+  color: #7f1d1d;
+}
+
+.zia-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.zia-form-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.zia-form-stack {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.zia-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.zia-field > span,
+.zia-check span {
+  color: var(--zia-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.zia-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.5rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--zia-border);
+  border-radius: 9px;
+  background: #ffffff;
+  color: var(--zia-ink);
+  font: inherit;
+}
+
+textarea.zia-input {
+  resize: vertical;
+}
+
+.zia-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: end;
+  min-height: 2.5rem;
+}
+
+.zia-actions {
+  display: flex;
+  align-items: center;
+}
+
+.zia-button {
+  appearance: none;
+  border: 0;
+  border-radius: 9px;
+  padding: 0.65rem 0.95rem;
+  background: var(--zia-dark);
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+.zia-button:hover {
+  opacity: 0.92;
+}
+
+.zia-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.65rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.zia-status-live {
+  background: #e8f5ec;
+  color: #175c2d;
+}
+
+.zia-status-alert {
+  background: #fdeaea;
+  color: #8f2020;
+}
+
+.zia-status-muted {
+  background: #eef1f4;
+  color: #58636e;
+}
+
+.zia-empty {
+  margin: 0;
+  color: var(--zia-muted);
+}
+
+.zia-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 760px) {
+  .zia-form-grid,
+  .zia-form-grid-2,
+  .zia-two-col {
+    grid-template-columns: 1fr;
+  }
+}
