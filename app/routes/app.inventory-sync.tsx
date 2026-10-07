@@ -17,45 +17,60 @@ type PendingReceipt = {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
-  const audits = await prisma.inventoryAudit.findMany({
-    where: {
-      shop: session.shop,
-      reason: "PURCHASE_RECEIPT_RECORDED",
-      source: "PURCHASE_ORDER",
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
-
-  const pending: PendingReceipt[] = audits.flatMap((audit) => {
-    if (!audit.metadata) return [];
-    try {
-      const metadata = JSON.parse(audit.metadata) as {
-        purchaseOrderId?: string;
-        lineId?: string;
-        shopifyInventoryUpdate?: string;
-      };
-      if (metadata.shopifyInventoryUpdate !== "pending") return [];
-      return [{
-        id: audit.id,
-        createdAt: audit.createdAt.toISOString(),
-        purchaseOrderId: metadata.purchaseOrderId ?? null,
-        lineId: metadata.lineId ?? null,
-        quantity: audit.change ?? 0,
-        locationName: audit.locationName ?? null,
-      }];
-    } catch {
-      return [];
-    }
-  });
-
-  const syncState = await prisma.syncState.findUnique({
-    where: {
-      shop_resource: {
+  const [pendingCount, audits, syncState] = await Promise.all([
+    prisma.inventoryAudit.count({
+      where: {
         shop: session.shop,
-        resource: "SHOPIFY_INVENTORY_RECEIPTS",
+        reason: "PURCHASE_RECEIPT_RECORDED",
+        source: "PURCHASE_ORDER",
+        syncStatus: "PENDING",
       },
-    },
+    }),
+    prisma.inventoryAudit.findMany({
+      where: {
+        shop: session.shop,
+        reason: "PURCHASE_RECEIPT_RECORDED",
+        source: "PURCHASE_ORDER",
+        syncStatus: "PENDING",
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    prisma.syncState.findUnique({
+      where: {
+        shop_resource: {
+          shop: session.shop,
+          resource: "SHOPIFY_INVENTORY_RECEIPTS",
+        },
+      },
+    }),
+  ]);
+
+  const pending: PendingReceipt[] = audits.map((audit) => {
+    let purchaseOrderId: string | null = null;
+    let lineId: string | null = null;
+
+    if (audit.metadata) {
+      try {
+        const metadata = JSON.parse(audit.metadata) as {
+          purchaseOrderId?: string;
+          lineId?: string;
+        };
+        purchaseOrderId = metadata.purchaseOrderId ?? null;
+        lineId = metadata.lineId ?? null;
+      } catch {
+        // Keep the receipt visible even when legacy metadata cannot be parsed.
+      }
+    }
+
+    return {
+      id: audit.id,
+      createdAt: audit.createdAt.toISOString(),
+      purchaseOrderId,
+      lineId,
+      quantity: audit.change ?? 0,
+      locationName: audit.locationName ?? null,
+    };
   });
 
   return {
@@ -82,13 +97,13 @@ export default function InventorySync() {
       <div className="zia-grid">
         <div className="zia-card zia-card-alert">
           <span>Pending Shopify updates</span>
-          <strong>{data.pending.length}</strong>
+          <strong>{data.pendingCount}</strong>
           <small>receipts recorded locally</small>
         </div>
         <div className="zia-card">
           <span>Sync state</span>
           <strong>{data.syncState?.lastError ? "Pending" : "Ready"}</strong>
-          <small>Shopify remains the inventory source of truth</small>
+          <small>{data.pendingCount > 0 ? "Awaiting Shopify inventory write" : "No receipts currently waiting"}</small>
         </div>
       </div>
 
