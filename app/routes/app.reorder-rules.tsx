@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
   Form,
+  Link,
   redirect,
   useActionData,
   useLoaderData,
@@ -335,7 +336,7 @@ export default function ReorderRules() {
               {data.selectedRule ? "Update rule" : "Save rule"}
             </button>
             {data.selectedRule ? (
-              <s-link href="/app/reorder-rules">Cancel edit</s-link>
+              <Link to="/app/reorder-rules">Cancel edit</Link>
             ) : null}
           </div>
         </Form>
