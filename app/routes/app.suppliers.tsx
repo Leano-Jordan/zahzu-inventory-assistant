@@ -117,15 +117,31 @@ export async function action({ request }: ActionFunctionArgs) {
       const supplierId = String(formData.get("supplierId") || "");
       const variantGid = String(formData.get("variantGid") || "");
       const sku = String(formData.get("sku") || "").trim();
-      const unitCost = optionalFloat(formData.get("unitCost"));
-      const leadTimeDays = optionalInt(formData.get("leadTimeDays"));
-      const reorderPoint = optionalInt(formData.get("reorderPoint"));
-      const reorderQuantity = optionalInt(formData.get("reorderQuantity"));
+      const unitCostRaw = String(formData.get("unitCost") || "").trim();
+      const leadTimeDaysRaw = String(formData.get("leadTimeDays") || "").trim();
+      const reorderPointRaw = String(formData.get("reorderPoint") || "").trim();
+      const reorderQuantityRaw = String(formData.get("reorderQuantity") || "").trim();
+      const unitCost = optionalFloat(unitCostRaw);
+      const leadTimeDays = optionalInt(leadTimeDaysRaw);
+      const reorderPoint = optionalInt(reorderPointRaw);
+      const reorderQuantity = optionalInt(reorderQuantityRaw);
 
       if (!supplierId || !variantGid) {
         return {
           status: "error" as const,
           message: "Supplier and tracked variant are required.",
+        };
+      }
+
+      if (
+        (unitCostRaw && unitCost === null) ||
+        (leadTimeDaysRaw && leadTimeDays === null) ||
+        (reorderPointRaw && reorderPoint === null) ||
+        (reorderQuantityRaw && reorderQuantity === null)
+      ) {
+        return {
+          status: "error" as const,
+          message: "Optional cost and quantity fields must be valid non-negative numbers.",
         };
       }
 
