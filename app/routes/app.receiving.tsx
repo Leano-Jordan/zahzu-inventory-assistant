@@ -21,7 +21,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const lineId = String(data.get("lineId") || "");
   const receivedNow = Number(data.get("receivedNow") || 0);
 
-  if (!lineId || !Number.isInteger(receivedNow) || receivedNow <= 0) {
+  if (!lineId || !Number.isSafeInteger(receivedNow) || receivedNow <= 0) {
     return { status: "error" as const, message: "Enter a positive received quantity." };
   }
 
@@ -69,25 +69,15 @@ export async function action({ request }: ActionFunctionArgs) {
           reason: "PURCHASE_RECEIPT_RECORDED",
           source: "PURCHASE_ORDER",
           actor: session.email || session.shop,
+          syncStatus: "PENDING",
+          syncError: null,
           metadata: JSON.stringify({
             purchaseOrderId: line.purchaseOrderId,
             lineId: line.id,
-            shopifyInventoryUpdate: "pending",
           }),
         },
       });
 
-      await tx.syncState.upsert({
-        where: { shop_resource: { shop: session.shop, resource: "SHOPIFY_INVENTORY_RECEIPTS" } },
-        create: {
-          shop: session.shop,
-          resource: "SHOPIFY_INVENTORY_RECEIPTS",
-          lastError: "Receipt recorded locally; Shopify inventory update is pending.",
-        },
-        update: {
-          lastError: "Receipt recorded locally; Shopify inventory update is pending.",
-        },
-      });
     });
   } catch (error) {
     console.error("ZIA receiving failed", error);
