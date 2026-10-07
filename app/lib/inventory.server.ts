@@ -29,6 +29,20 @@ export type InventoryFoundationData = {
   locations: Array<{ id: string; name: string }>;
 };
 
+export type InventoryHealthLevel = {
+  inventoryItemGid: string;
+  variantGid: string;
+  productTitle: string;
+  displayName: string;
+  sku: string | null;
+  locationGid: string;
+  locationName: string;
+  available: number;
+  onHand: number | null;
+  incoming: number | null;
+  committed: number | null;
+};
+
 const PRODUCT_VARIANTS_QUERY = [
   "#graphql
   query InventoryFoundationVariants($first: Int!, $after: String) {
@@ -51,19 +65,59 @@ const PRODUCT_VARIANTS_QUERY = [
         endCursor
       }
     }
-  }
+  }",
 ].join("\n");
 
 const LOCATIONS_QUERY = [
   "#graphql
-  query InventoryFoundationLocations {
-    locations(first: 100) {
+  query InventoryFoundationLocations($first: Int!, $after: String) {
+    locations(first: $first, after: $after) {
       nodes {
         id
         name
       }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
     }
-  }
+  }",
+].join("\n");
+
+const INVENTORY_HEALTH_QUERY = [
+  "#graphql
+  query InventoryHealthVariants($first: Int!, $after: String) {
+    productVariants(first: $first, after: $after) {
+      nodes {
+        id
+        displayName
+        sku
+        inventoryItem {
+          id
+          tracked
+          inventoryLevels(first: 250) {
+            nodes {
+              location {
+                id
+                name
+              }
+              quantities(names: ["available", "on_hand", "incoming", "committed"]) {
+                name
+                quantity
+              }
+            }
+          }
+        }
+        product {
+          title
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }",
 ].join("\n");
 
 async function readGraphqlData(
@@ -116,19 +170,111 @@ export async function loadInventoryFoundation(
       : null;
   } while (after);
 
-  const locationData = await readGraphqlData(
-    await admin.graphql(LOCATIONS_QUERY),
-  );
+  const locations: Array<{ id: string; name: string }> = [];
+  let locationAfter: string | null = null;
 
-  const locations = locationData.locations as Array<{
-    id: string;
-    name: string;
-  }>;
+  do {
+    const locationData = await readGraphqlData(
+      await admin.graphql(LOCATIONS_QUERY, {
+        variables: {
+          first: 250,
+          after: locationAfter,
+        },
+      }),
+    );
+
+    const connection = locationData.locations as {
+      nodes: Array<{ id: string; name: string }>;
+      pageInfo: {
+        hasNextPage: boolean;
+        endCursor: string | null;
+      };
+    };
+
+    locations.push(...connection.nodes);
+    locationAfter = connection.pageInfo.hasNextPage
+      ? connection.pageInfo.endCursor
+      : null;
+  } while (locationAfter);
 
   return {
     variants,
     locations,
   };
+}
+
+export async function loadInventoryHealth(
+  admin: AdminClient,
+): Promise<InventoryHealthLevel[]> {
+  const levels: InventoryHealthLevel[] = [];
+  let after: string | null = null;
+
+  do {
+    const data = await readGraphqlData(
+      await admin.graphql(INVENTORY_HEALTH_QUERY, {
+        variables: {
+          first: 100,
+          after,
+        },
+      }),
+    );
+
+    const connection = data.productVariants as {
+      nodes: Array<{
+        id: string;
+        displayName: string;
+        sku: string | null;
+        product: { title: string };
+        inventoryItem: {
+          id: string;
+          tracked: boolean;
+          inventoryLevels: {
+            nodes: Array<{
+              location: { id: string; name: string };
+              quantities: Array<{ name: string; quantity: number }>;
+            }>;
+          };
+        } | null;
+      }>;
+      pageInfo: {
+        hasNextPage: boolean;
+        endCursor: string | null;
+      };
+    };
+
+    for (const variant of connection.nodes) {
+      if (!variant.inventoryItem?.tracked) continue;
+
+      for (const level of variant.inventoryItem.inventoryLevels.nodes) {
+        const quantity = (name: string) =>
+          level.quantities.find((item) => item.name === name)?.quantity ?? 0;
+        const optionalQuantity = (name: string) => {
+          const item = level.quantities.find((entry) => entry.name === name);
+          return item ? item.quantity : null;
+        };
+
+        levels.push({
+          inventoryItemGid: variant.inventoryItem.id,
+          variantGid: variant.id,
+          productTitle: variant.product.title,
+          displayName: variant.displayName,
+          sku: variant.sku,
+          locationGid: level.location.id,
+          locationName: level.location.name,
+          available: quantity("available"),
+          onHand: optionalQuantity("on_hand"),
+          incoming: optionalQuantity("incoming"),
+          committed: optionalQuantity("committed"),
+        });
+      }
+    }
+
+    after = connection.pageInfo.hasNextPage
+      ? connection.pageInfo.endCursor
+      : null;
+  } while (after);
+
+  return levels;
 }
 
 export function summariseInventory(data: InventoryFoundationData) {
