@@ -75,6 +75,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return {
     pending,
+    pendingCount,
     syncState: syncState
       ? {
           lastSuccessfulAt: syncState.lastSuccessfulAt?.toISOString() ?? null,
@@ -101,9 +102,9 @@ export default function InventorySync() {
           <small>receipts recorded locally</small>
         </div>
         <div className="zia-card">
-          <span>Sync state</span>
-          <strong>{data.syncState?.lastError ? "Pending" : "Ready"}</strong>
-          <small>{data.pendingCount > 0 ? "Awaiting Shopify inventory write" : "No receipts currently waiting"}</small>
+          <span>Queue state</span>
+          <strong>{data.pendingCount > 0 ? "Pending" : "Clear"}</strong>
+          <small>Shopify inventory writes are not active yet</small>
         </div>
       </div>
 
