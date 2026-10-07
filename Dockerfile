@@ -9,7 +9,7 @@ ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./
 
-RUN npm ci
+RUN npm ci --include=dev
 
 COPY . .
 
