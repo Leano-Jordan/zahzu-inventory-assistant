@@ -5,6 +5,11 @@ type AdminClient = {
   ) => Promise<Response>;
 };
 
+type GraphqlBody = {
+  data?: Record<string, unknown>;
+  errors?: Array<{ message?: string }>;
+};
+
 export type ProductVariantNode = {
   id: string;
   displayName: string;
@@ -61,15 +66,21 @@ const LOCATIONS_QUERY = [
   }
 ].join("\n");
 
-async function readGraphqlJson(response: Response): Promise<Record<string, any>> {
-  const body = await response.json();
+async function readGraphqlData(
+  response: Response,
+): Promise<Record<string, unknown>> {
+  const body = (await response.json()) as GraphqlBody;
 
   if (!response.ok || body.errors?.length) {
     const message =
-      body.errors?.map((error: { message?: string }) => error.message).join("; ") ||
+      body.errors?.map((error) => error.message).filter(Boolean).join("; ") ||
       `Shopify Admin API request failed with HTTP ${response.status}`;
 
     throw new Error(message);
+  }
+
+  if (!body.data) {
+    throw new Error("Shopify Admin API returned no data.");
   }
 
   return body.data;
@@ -82,7 +93,7 @@ export async function loadInventoryFoundation(
   let after: string | null = null;
 
   do {
-    const data = await readGraphqlJson(
+    const data = await readGraphqlData(
       await admin.graphql(PRODUCT_VARIANTS_QUERY, {
         variables: {
           first: 250,
@@ -91,23 +102,32 @@ export async function loadInventoryFoundation(
       }),
     );
 
-    variants.push(...(data.productVariants.nodes as ProductVariantNode[]));
-
-    const pageInfo = data.productVariants.pageInfo as {
-      hasNextPage: boolean;
-      endCursor: string | null;
+    const connection = data.productVariants as {
+      nodes: ProductVariantNode[];
+      pageInfo: {
+        hasNextPage: boolean;
+        endCursor: string | null;
+      };
     };
 
-    after = pageInfo.hasNextPage ? pageInfo.endCursor : null;
+    variants.push(...connection.nodes);
+    after = connection.pageInfo.hasNextPage
+      ? connection.pageInfo.endCursor
+      : null;
   } while (after);
 
-  const locationData = await readGraphqlJson(
+  const locationData = await readGraphqlData(
     await admin.graphql(LOCATIONS_QUERY),
   );
 
+  const locations = locationData.locations as Array<{
+    id: string;
+    name: string;
+  }>;
+
   return {
     variants,
-    locations: locationData.locations.nodes,
+    locations,
   };
 }
 
