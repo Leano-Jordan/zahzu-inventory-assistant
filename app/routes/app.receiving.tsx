@@ -37,19 +37,27 @@ export async function action({ request }: ActionFunctionArgs) {
       return { status: "error" as const, message: `Only ${remaining} units remain open on this line.` };
     }
 
-    const newReceived = line.quantityReceived + receivedNow;
-
     await prisma.$transaction(async (tx) => {
-      await tx.purchaseOrderLine.update({
-        where: { id: line.id },
-        data: { quantityReceived: newReceived },
+      const updated = await tx.purchaseOrderLine.updateMany({
+        where: {
+          id: line.id,
+          purchaseOrderId: line.purchaseOrderId,
+          quantityReceived: line.quantityReceived,
+        },
+        data: { quantityReceived: { increment: receivedNow } },
       });
+
+      if (updated.count !== 1) {
+        throw new Error("RECEIPT_CONFLICT");
+      }
 
       const lines = await tx.purchaseOrderLine.findMany({
         where: { purchaseOrderId: line.purchaseOrderId },
         select: { quantityOrdered: true, quantityReceived: true },
       });
-      const allReceived = lines.length > 0 && lines.every((item) => item.quantityReceived >= item.quantityOrdered);
+      const allReceived =
+        lines.length > 0 &&
+        lines.every((item) => item.quantityReceived >= item.quantityOrdered);
       const anyReceived = lines.some((item) => item.quantityReceived > 0);
       const status = allReceived ? "RECEIVED" : anyReceived ? "PARTIAL" : "ORDERED";
 
@@ -77,9 +85,14 @@ export async function action({ request }: ActionFunctionArgs) {
           }),
         },
       });
-
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "RECEIPT_CONFLICT") {
+      return {
+        status: "error" as const,
+        message: "That line changed while you were receiving it. Refresh and try again.",
+      };
+    }
     console.error("ZIA receiving failed", error);
     return { status: "error" as const, message: "The receipt could not be recorded." };
   }
