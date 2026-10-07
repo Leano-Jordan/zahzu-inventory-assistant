@@ -44,7 +44,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 function nextPurchaseOrderNumber(numbers: string[]) {
   const highest = numbers.reduce((max, number) => {
     const match = /^PO-(\d+)$/.exec(number);
-    return match ? Math.max(max, Number(match[1])) : max;
+    if (!match) return max;
+    const parsed = Number(match[1]);
+    return Number.isSafeInteger(parsed) ? Math.max(max, parsed) : max;
   }, 0);
 
   return `PO-${String(highest + 1).padStart(5, "0")}`;
