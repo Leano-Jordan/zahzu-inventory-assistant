@@ -202,7 +202,7 @@ export default function PurchaseOrders() {
             <table className="zia-table">
               <thead>
                 <tr>
-                  <th>PO</th><th>Supplier</th><th>Items</th><th>Status</th><th>Expected</th>
+                  <th>PO</th><th>Supplier</th><th>Units</th><th>Status</th><th>Expected</th>
                 </tr>
               </thead>
               <tbody>
