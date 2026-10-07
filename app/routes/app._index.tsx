@@ -47,12 +47,12 @@ export default function Index() {
           <div className="zia-grid">
             <div className="zia-card">
               <span>Tracked variants</span>
-              <strong>{result.summary.trackedCount}</strong>
+              <strong>{result.summary.trackedVariantCount}</strong>
               <small>of {result.summary.variantCount} variants</small>
             </div>
             <div className="zia-card">
               <span>Available units</span>
-              <strong>{result.summary.totalAvailable.toLocaleString()}</strong>
+              <strong>{result.summary.lowestStock.reduce((sum, variant) => sum + (variant.inventoryQuantity ?? 0), 0).toLocaleString()}</strong>
               <small>across tracked variants</small>
             </div>
             <div className="zia-card zia-card-alert">
@@ -100,6 +100,8 @@ export default function Index() {
               <div><strong>Inventory Health</strong><span>See stock by location and the items that need action. <s-link href="/app/inventory-health">Open health</s-link></span></div>
               <div><strong>Reorder Rules</strong><span>Set the threshold and target stock for each variant and location. <s-link href="/app/reorder-rules">Configure rules</s-link></span></div>
               <div><strong>Suppliers</strong><span>Map tracked variants to the suppliers that replenish them. <s-link href="/app/suppliers">Manage suppliers</s-link></span></div>
+              <div><strong>Purchase Orders</strong><span>Create supplier orders from tracked Shopify variants. <s-link href="/app/purchase-orders">Open purchasing</s-link></span></div>
+              <div><strong>Receiving</strong><span>Record deliveries against open purchase orders. <s-link href="/app/receiving">Open receiving</s-link></span></div>
             </div>
           </s-section>
         </>
