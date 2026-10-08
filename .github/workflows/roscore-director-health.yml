@@ -1,0 +1,138 @@
+name: Rosscore Director Health Report
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health-report:
+    runs-on: ubuntu-latest
+    env:
+      DIRECTOR: "Plug"
+      REPOSITORY: "${{ github.repository }}"
+      COMMIT_SHA: "${{ github.sha }}"
+      BRANCH: "${{ github.ref_name }}"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 20
+
+      - name: Generate post-commit health report
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess, datetime
+
+          root = pathlib.Path(".")
+          def run(*args):
+              try:
+                  return subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL).strip()
+              except Exception:
+                  return ""
+
+          def exists(p):
+              return (root / p).exists()
+
+          sha = os.environ["COMMIT_SHA"]
+          report = {
+              "schema": "roscore-director-health/v1",
+              "generated_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "repository": os.environ["REPOSITORY"],
+              "branch": os.environ["BRANCH"],
+              "commit": sha,
+              "director": os.environ["DIRECTOR"],
+              "commit_message": run("git","log","-1","--pretty=%s"),
+              "commit_author": run("git","log","-1","--pretty=%an"),
+              "changed_files": run("git","show","--pretty=","--name-only","--format=",sha).splitlines(),
+              "signals": {
+                  "manifest": exists("ROSCORE_PROJECT_MANIFEST.md"),
+                  "agents_contract": exists("AGENTS.md"),
+                  "package_json": exists("package.json"),
+                  "composer_json": exists("composer.json"),
+                  "requirements": exists("requirements.txt") or exists("pyproject.toml"),
+                  "github_actions": exists(".github/workflows"),
+                  "tests_directory": exists("tests") or exists("test"),
+                  "readme": exists("README.md"),
+              },
+              "latest_commit_age": run("git","log","-1","--format=%cr"),
+          }
+
+          p = root / "package.json"
+          if p.exists():
+              try:
+                  pkg = json.loads(p.read_text())
+                  scripts = pkg.get("scripts", {})
+                  report["package"] = {
+                      "name": pkg.get("name"),
+                      "version": pkg.get("version"),
+                      "scripts": sorted(scripts.keys()),
+                  }
+                  report["signals"]["test_script"] = "test" in scripts
+                  report["signals"]["build_script"] = "build" in scripts
+                  report["signals"]["lint_script"] = "lint" in scripts
+              except Exception as e:
+                  report["package_error"] = str(e)
+          else:
+              report["signals"]["test_script"] = False
+              report["signals"]["build_script"] = False
+              report["signals"]["lint_script"] = False
+
+          present = [k for k,v in report["signals"].items() if v]
+          missing = [k for k,v in report["signals"].items() if not v]
+
+          if report["signals"].get("manifest") and report["signals"].get("agents_contract"):
+              readiness = "DIRECTOR_READY"
+          elif report["signals"].get("manifest") or report["signals"].get("agents_contract"):
+              readiness = "PARTIAL_DIRECTOR_CONTRACT"
+          else:
+              readiness = "NO_DIRECTOR_CONTRACT"
+
+          report["readiness"] = readiness
+          report["risk_flags"] = []
+          if not report["signals"].get("test_script") and not report["signals"].get("tests_directory"):
+              report["risk_flags"].append("NO_TEST_SIGNAL")
+          if not report["signals"].get("github_actions"):
+              report["risk_flags"].append("NO_GITHUB_ACTIONS")
+          if not report["signals"].get("readme"):
+              report["risk_flags"].append("NO_README")
+          if not report["signals"].get("manifest"):
+              report["risk_flags"].append("NO_ROSSCORE_MANIFEST")
+
+          out = pathlib.Path("roscore-director-health.json")
+          out.write_text(json.dumps(report, indent=2) + "\n")
+
+          md = pathlib.Path("roscore-director-health.md")
+          lines = [
+              "# Rosscore Director Health Report",
+              "",
+              f"- **Repository:** {report['repository']}",
+              f"- **Director:** {report['director']}",
+              f"- **Branch:** {report['branch']}",
+              f"- **Commit:** {report['commit']}",
+              f"- **Commit:** {report['commit_message']}",
+              f"- **Readiness:** **{report['readiness']}**",
+              "",
+              "## Health Signals",
+              ""
+          ]
+          for k,v in report["signals"].items():
+              lines.append(f"- {'PASS' if v else 'WARN'} — {k}")
+          lines += ["", "## Risk Flags", ""]
+          lines += [f"- {x}" for x in report["risk_flags"]] or ["- None detected by the automated baseline."]
+          lines += ["", "## Changed Files", ""]
+          lines += [f"- {x}" for x in report["changed_files"][:100]] or ["- No file list available."]
+          md.write_text("\n".join(lines) + "\n")
+          PY
+
+      - name: Publish report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: roscore-director-health-${{ github.sha }}
+          path: |
+            roscore-director-health.json
+            roscore-director-health.md
+          retention-days: 30
